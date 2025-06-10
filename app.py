@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 import base64
+import io
+from fpdf import FPDF
+import tempfile
 
 # Sayfa ayarı
 st.set_page_config(page_title="Panel ve Alan Yerleşim Hesaplayıcı", layout="centered")
@@ -16,7 +19,7 @@ def image_to_base64(path):
 logo1_b64 = image_to_base64("logo_beyaz_nobg.png")
 logo2_b64 = image_to_base64("SPUTEK_isim.png")
 
-# Logo ve başlık bölümü
+# Logo ve başlık
 st.markdown(
     f"""
     <div style="display: flex; justify-content: center; margin-bottom: 20px;">
@@ -29,8 +32,8 @@ st.markdown(
             align-items: center;
             gap: 10px;
             box-shadow: 0 0 8px 1px #00ffcc, 0 0 12px 1px #00ffcc;">
-            <img src="data:image/png;base64,{logo1_b64}" alt="Logo 1" width="100"/>
-            <img src="data:image/png;base64,{logo2_b64}" alt="Logo 2" width="200"/>
+            <img src="data:image/png;base64,{logo1_b64}" width="100"/>
+            <img src="data:image/png;base64,{logo2_b64}" width="200"/>
         </div>
     </div>
     """,
@@ -47,7 +50,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Panel tipleri ve güç değerleri (Wp)
+# Panel tipleri
 panel_tipleri = {
     "Tip A – 166mm x 83mm – 3.159 Wp": (0.166, 0.083, 3.159),
     "Tip B – 91mm x 182mm – 4.5 Wp": (0.091, 0.182, 4.5),
@@ -97,7 +100,7 @@ for i in range(int(sutun)):
 
 st.pyplot(fig1)
 
-# 2. Bölüm
+# Alan yerleşimi
 st.subheader("Alan Yerleşimi Hesapla (boşluksuz)")
 verilen_genislik = st.number_input("📏 Alan Genişliği (m)", min_value=0.1, value=5.0)
 verilen_yukseklik = st.number_input("📏 Alan Yüksekliği (m)", min_value=0.1, value=5.0)
@@ -133,7 +136,7 @@ for i in range(adet_x):
 
 st.pyplot(fig2)
 
-# Sayfa Altında Güç Özeti
+# Güç özeti
 st.markdown("---")
 st.markdown(
     f"""
@@ -148,18 +151,54 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Alt Bilgi
+# PDF için figürleri geçici dosyaya kaydet
+with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp1:
+    fig1.savefig(tmp1.name, format="png")
+    fig1_path = tmp1.name
+
+with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp2:
+    fig2.savefig(tmp2.name, format="png")
+    fig2_path = tmp2.name
+
+# PDF oluştur
+pdf = FPDF()
+pdf.add_page()
+pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
+pdf.set_font('DejaVu', '', 14)
+pdf.cell(200, 10, txt="Panel ve Alan Yerleşim Raporu", ln=True, align="C")
+pdf.ln(10)
+pdf.set_font('DejaVu', '', 10)
+pdf.multi_cell(0, 10, txt=f"""
+Seçilen Hücre Tipi: {tip_secimi}
+Matris: {satir} x {sutun}
+Hücre Grubu Boyutu: {cati_en:.3f} m x {cati_boy:.3f} m
+Toplam Hücre: {toplam_hucre}
+Panel Grubu Gücü: {panel_grubu_gucu_wp:.1f} Wp ({panel_grubu_gucu_kwp:.2f} kWp)
+
+Alan: {verilen_genislik} m x {verilen_yukseklik} m
+Yerleşim Yönü: {yerlesim_yonu}
+Yerleşen Grup: {adet_x} x {adet_y} = {toplam_grup}
+Toplam Sistem Gücü: {sistem_toplam_guc_wp:.1f} Wp ({sistem_toplam_guc_kwp:.2f} kWp)
+""")
+pdf.image(fig1_path, x=10, w=180)
+pdf.add_page()
+pdf.image(fig2_path, x=10, w=180)
+
+# PDF çıktısını base64 ile indirilebilir hale getir
+pdf_bytes = pdf.output(dest='S').encode('latin1')
+pdf_output = io.BytesIO(pdf_bytes)
+b64_pdf = base64.b64encode(pdf_output.read()).decode('utf-8')
+href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="yerlesim_raporu.pdf">📄 PDF olarak indir</a>'
+st.markdown(href, unsafe_allow_html=True)
+
 # Alt Bilgi
 st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center; font-size: 16px; color: gray;">
         🔋 Geliştirici: <strong>Sputek Teknoloji A.Ş.</strong> – Mobil & Akıllı GES Uygulamaları |
-        <span style="font-weight: bold;">
-            Eren Doğan
-        </span>
+        <span style="font-weight: bold;">Eren Doğan</span>
     </div>
     """,
     unsafe_allow_html=True
 )
-
